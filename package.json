@@ -1,0 +1,43 @@
+{
+  "name": "scraper-script",
+  "version": "1.0.0",
+  "description": "Production-ready web scraping system with BullMQ, Hono, and Playwright",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev:server": "bun run --watch server.ts",
+    "dev:worker": "bun run --watch worker.ts",
+    "start:server": "bun run server.ts",
+    "start:worker": "bun run worker.ts",
+    "test:scraper": "bun run src/scrapers/quotes-scraper.ts",
+    "build": "mkdir -p dist && bun build ./server.ts --target bun --outfile ./dist/server.js && bun build ./worker.ts --target bun --outfile ./dist/worker.js",
+    "build:prod": "bun run build && bun run pm2:start:prod",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:start:prod": "pm2 start ecosystem.prod.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:delete": "pm2 delete ecosystem.config.cjs",
+    "pm2:status": "pm2 status",
+    "pm2:logs": "pm2 logs",
+    "pm2:monitor": "pm2 monit",
+    "setup": "mkdir -p data logs && bun install",
+    "clean": "rm -rf data/*.db logs/*.log",
+    "railway:start": "bun run start:server & bun run start:worker & wait"
+  },
+  "keywords": ["scraping", "playwright", "bullmq", "hono", "bun"],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "bullmq": "^5.58.1",
+    "hono": "^4.9.4",
+    "ioredis": "^5.7.0",
+    "playwright": "^1.55.0"
+  }
+}
