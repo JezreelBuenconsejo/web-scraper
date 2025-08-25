@@ -26,11 +26,20 @@ export class SimpleTikTokScraper {
    * Initialize browser - keep it simple
    */
   async init(): Promise<void> {
-    console.log('🚀 Starting simple TikTok hashtag scraper...');
+    console.log('🚀 Starting simple TikTok scraper...');
+    
+    // Detect production environment (Railway, etc.)
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'production';
     
     // Simple browser setup - no fancy stealth mode
     this.browser = await chromium.launch({
-      headless: false,  // Keep visible for debugging
+      headless: isProduction,
+      args: isProduction ? [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-extensions',
+      ] : []
     });
     
     this.page = await this.browser.newPage();
@@ -38,6 +47,7 @@ export class SimpleTikTokScraper {
     // Basic mobile viewport (TikTok is mobile-first)
     await this.page.setViewportSize({ width: 375, height: 812 });
     
+    console.log(`✅ Simple TikTok scraper ready! (${isProduction ? 'headless' : 'headed'} mode)`);
   }
 
   /**
