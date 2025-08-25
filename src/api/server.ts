@@ -45,7 +45,7 @@ app.get('/', (c) => {
       quickQuotes: 'POST /quick/quotes',
       quickReddit: 'POST /quick/reddit',
     },
-    documentation: 'https://github.com/JezreelBuenconsejo/web-scraper/README.md',
+    documentation: 'https://github.com/JezreelBuenconsejo/web-scraper/blob/main/README.md',
     examples: {
       quickStart: 'POST /quick/quotes or POST /quick/reddit',
       customQuotes: 'POST /scrape with {"type": "scrape-quotes", "url": "http://quotes.toscrape.com", "pages": 3}',
