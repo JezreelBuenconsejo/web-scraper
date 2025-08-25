@@ -43,11 +43,13 @@ app.get('/', (c) => {
       jobs: '/jobs',
       stats: '/stats',
       quickQuotes: 'POST /quick/quotes',
+      quickReddit: 'POST /quick/reddit',
     },
     documentation: 'https://github.com/JezreelBuenconsejo/web-scraper/README.md',
     examples: {
-      quickStart: 'POST /quick/quotes',
-      customScrape: 'POST /scrape with {"type": "scrape-quotes", "url": "http://quotes.toscrape.com", "pages": 3}',
+      quickStart: 'POST /quick/quotes or POST /quick/reddit',
+      customQuotes: 'POST /scrape with {"type": "scrape-quotes", "url": "http://quotes.toscrape.com", "pages": 3}',
+      customReddit: 'POST /scrape with {"type": "scrape-reddit", "url": "https://old.reddit.com/r/programming", "pages": 5}',
     },
   });
 });
@@ -407,6 +409,55 @@ app.get('/debug/status', async (c) => {
     return c.json({
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : 'No stack trace'
+    }, 500);
+  }
+});
+
+// Quick scrape Reddit (for testing)
+app.post('/quick/reddit', async (c) => {
+  try {
+    console.log('🟠 Starting quick Reddit scrape...');
+    
+    const jobId = await addScrapeJob(
+      JobType.SCRAPE_REDDIT,
+      { url: 'https://old.reddit.com/r/programming/', pages: 5 },
+      5  // High priority
+    );
+
+    console.log(`✅ Reddit job created with ID: ${jobId}`);
+
+    // 💾 Create job record in database
+    console.log(`💾 Creating database record for job ${jobId}...`);
+    const dbRecordId = scraperDB.createScrapeJob({
+      job_id: jobId,
+      job_type: JobType.SCRAPE_REDDIT,
+      status: 'pending',
+      started_at: new Date().toISOString(),
+    });
+
+    console.log(`💾 Database record created with ID: ${dbRecordId}`);
+
+    return c.json({
+      success: true,
+      message: 'Quick Reddit scraping started!',
+      jobId,
+      checkStatus: `/jobs/${jobId}`,
+      estimatedTime: '2-3 minutes',
+      target: 'r/programming (5 posts)',
+    });
+
+  } catch (error) {
+    console.error('❌ Error starting quick Reddit scrape:', error);
+    console.error('❌ Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+    });
+    
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to start quick Reddit scrape',
+      details: error instanceof Error ? error.name : 'Unknown error type',
     }, 500);
   }
 });

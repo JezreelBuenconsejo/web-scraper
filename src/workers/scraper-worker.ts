@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq';
 import { redisConnection } from '../config/redis.js';
 import { JobType, type ScrapeJobData, getQueueStats } from '../config/bullmq.js';
 import { QuotesScraper } from '../scrapers/quotes-scraper.js';
+import { RedditScraper } from '../scrapers/reddit-scraper.js';
 import { scraperDB } from '../database/database.js';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
@@ -105,20 +106,130 @@ async function processQuotesJob(job: Job<ScrapeJobData>): Promise<any> {
 }
 
 /**
- * 🟠 PROCESS REDDIT SCRAPING JOB (placeholder for future)
+ * PROCESS REDDIT SCRAPING JOB
  */
 async function processRedditJob(job: Job<ScrapeJobData>): Promise<any> {
+  const { url, pages, options } = job.data;
   console.log(`🟠 Processing reddit scraping job ${job.id}...`);
-  await job.updateProgress(50);
+  console.log(`📋 Job data:`, {
+    type: job.data.type,
+    url: url || 'https://old.reddit.com/r/programming',
+    pages: pages || 10,
+    requestId: job.data.metadata?.requestId,
+  });
+
+  const scraper = new RedditScraper();
   
-  // TODO: Implement Reddit scraper
-  console.log('📝 Reddit scraper not implemented yet');
-  
-  await job.updateProgress(100);
-  return {
-    success: true,
-    message: 'Reddit scraper placeholder - coming soon!',
-  };
+  try {
+    await job.updateProgress(10);
+    
+    // Initialize browser
+    console.log('🚀 Initializing Reddit scraper...');
+    await scraper.init();
+    await job.updateProgress(30);
+    
+    // Extract subreddit from URL or use default
+    const subredditMatch = (url || 'https://old.reddit.com/r/programming').match(/\/r\/([^\/\?#]+)/);
+    const subredditName = subredditMatch?.[1] || 'programming';
+    console.log(`🎯 Targeting subreddit: r/${subredditName}`);
+    
+    // Navigate to subreddit
+    console.log('🔗 Navigating to subreddit...');
+    await scraper.navigateToSubreddit(subredditName);
+    await job.updateProgress(50);
+    
+    // Extract posts
+    console.log('🔍 Extracting Reddit posts...');
+    const maxPosts = pages || 10;
+    const posts = await scraper.extractPosts(subredditName, maxPosts);
+    await job.updateProgress(80);
+    
+    if (posts.length === 0) {
+      throw new Error('No posts found - subreddit might be empty or private');
+    }
+    
+    console.log(`✅ Successfully scraped ${posts.length} posts from r/${subredditName}`);
+    
+    // Store each post in database
+    console.log('💾 Storing posts in database...');
+    let storedCount = 0;
+    
+    for (const post of posts) {
+      try {
+        scraperDB.saveScrapedContent({
+          source: 'reddit',
+          url: post.url,
+          title: post.title,
+          content: `**Author:** u/${post.author}\n**Upvotes:** ${post.upvotes}\n**Comments:** ${post.comments}\n**Type:** ${post.postType}\n\n${post.content || 'No content'}`,
+          raw_data: JSON.stringify(post),
+          scraped_at: new Date().toISOString(),
+          metadata: JSON.stringify({
+            subreddit: post.subreddit,
+            postType: post.postType,
+            upvotes: post.upvotes,
+            comments: post.comments,
+            author: post.author,
+            created: post.created,
+            linkUrl: post.linkUrl
+          })
+        });
+        storedCount++;
+      } catch (error) {
+        console.warn(`⚠️ Failed to store post ${post.id}:`, error);
+        // Continue storing other posts
+      }
+    }
+    
+    await job.updateProgress(100);
+    
+    const result = {
+      success: true,
+      postsExtracted: posts.length,
+      postsStored: storedCount,
+      subreddit: subredditName,
+      summary: {
+        totalPosts: posts.length,
+        postTypes: posts.reduce((acc: any, post) => {
+          acc[post.postType] = (acc[post.postType] || 0) + 1;
+          return acc;
+        }, {}),
+        topPost: posts[0] ? {
+          title: posts[0].title,
+          author: posts[0].author,
+          upvotes: posts[0].upvotes,
+          comments: posts[0].comments
+        } : null
+      },
+      message: `Successfully scraped ${posts.length} posts from r/${subredditName}`,
+    };
+    
+    // Update job status in database
+    scraperDB.updateScrapeJob(job.id!, {
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      result_data: JSON.stringify(result)
+    });
+
+    console.log(`🎉 Reddit scraping job ${job.id} completed!`);
+    console.log(`📊 Final stats: ${storedCount}/${posts.length} posts stored`);
+    
+    return result;
+    
+  } catch (error) {
+    console.error(`❌ Error in reddit job ${job.id}:`, error);
+    
+    // Update job status to failed in database
+    scraperDB.updateScrapeJob(job.id!, {
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error_message: error instanceof Error ? error.message : String(error)
+    });
+    
+    throw error; // BullMQ will handle job failure
+  } finally {
+    // Always clean up browser
+    await scraper.close();
+  }
 }
 
 /**
