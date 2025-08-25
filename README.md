@@ -1,4 +1,4 @@
-# 🎭 Production-Ready Web Scraping System
+# 🎭 Web Scraping System
 
 A modern, scalable web scraping system built with **Playwright**, **BullMQ**, **Hono**, and **Bun**. This system demonstrates production-ready architecture for automated web scraping with queue management, RESTful API, and process monitoring.
 
@@ -25,7 +25,7 @@ graph TD
    - Automated browser control for dynamic content
    - **Quotes Scraper:** Multi-page scraping with beautiful Markdown output
    - **Reddit Scraper:** Smart subreddit parsing, post type detection, anti-bot evasion
-   - Support for TikTok (extensible architecture)
+   - **TikTok Scraper:** Real-time data extraction (videos, profiles, categories)
 
 2. **🐂 BullMQ Queue System**
    - Reliable job queue with Redis backend
@@ -54,7 +54,8 @@ Scraper Script/
 ├── src/
 │   ├── scrapers/         # 🎭 Playwright scrapers
 │   │   ├── quotes-scraper.ts
-│   │   └── reddit-scraper.ts
+│   │   ├── reddit-scraper.ts
+│   │   └── tiktok-scraper.ts
 │   ├── workers/          # 🐂 BullMQ job processors  
 │   │   └── scraper-worker.ts
 │   ├── api/              # 🔥 Hono REST API
@@ -90,7 +91,8 @@ mkdir -p data logs
 
 # Test the scrapers
 bun run src/scrapers/quotes-scraper.ts    # Test quotes scraper
-bun run src/scrapers/reddit-scraper.ts    # Test Reddit scraper
+bun run src/scrapers/reddit-scraper.ts    # Test Reddit scraper  
+bun run src/scrapers/tiktok-scraper.ts    # Test TikTok scraper
 ```
 
 ### **Development Mode**
@@ -136,6 +138,7 @@ bun run pm2:stop
 |--------|----------|-------------|
 | `POST` | `/quick/quotes` | Start quotes scraping |
 | `POST` | `/quick/reddit` | Start Reddit scraping (r/programming) |
+| `POST` | `/quick/tiktok` | Start TikTok data extraction |
 
 ### **Example API Usage**
 
@@ -158,12 +161,22 @@ curl -X POST http://localhost:3000/scrape \
     "url": "https://old.reddit.com/r/programming",
     "pages": 5
   }'
+
+# TikTok data extraction
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "scrape-tiktok",
+    "url": "https://www.tiktok.com/explore",
+    "pages": 20
+  }'
 ```
 
 **Quick testing:**
 ```bash
 curl -X POST http://localhost:3000/quick/quotes     # Quick quotes test
-curl -X POST http://localhost:3000/quick/reddit     # Quick Reddit test
+curl -X POST http://localhost:3000/quick/reddit     # Quick Reddit test  
+curl -X POST http://localhost:3000/quick/tiktok     # Quick TikTok test
 ```
 
 **Check job status:**
@@ -174,7 +187,8 @@ curl http://localhost:3000/jobs/YOUR_JOB_ID
 **Get scraped results:**
 ```bash
 curl "http://localhost:3000/results?source=quotes&limit=10"   # Quotes only
-curl "http://localhost:3000/results?source=reddit&limit=10"   # Reddit posts only  
+curl "http://localhost:3000/results?source=reddit&limit=10"   # Reddit posts only
+curl "http://localhost:3000/results?source=tiktok&limit=10"   # TikTok data only
 curl "http://localhost:3000/results?limit=20"                 # All scraped content
 ```
 
@@ -196,10 +210,16 @@ curl "http://localhost:3000/results?limit=20"                 # All scraped cont
   - Fallback extraction for enhanced reliability
   - Full worker integration with job status tracking
 
-### **3. TikTok Scraper** 🚧 (Bonus Feature)
-- **Target:** `https://tiktok.com`
-- **Data:** Video metadata, descriptions, hashtags
-- **Features:** Anti-bot evasion, rate limiting
+### **3. TikTok Scraper** ✅ (Complete)
+- **Target:** `https://www.tiktok.com/explore`
+- **Data:** Real videos (with view counts), creator profiles, content categories
+- **Features:** 
+  - Smart page navigation (tries multiple TikTok URLs for best results)
+  - Multi-strategy data extraction (videos, profiles, categories)
+  - Real-time view count extraction (e.g., "26.1M views")
+  - Content category intelligence (Comedy, Sports, Music, etc.)
+  - Simple & reliable approach (no complex anti-bot warfare)
+  - High success rate with fast execution (~8-10 seconds)
 
 ## 📊 Data Output Examples
 
@@ -232,6 +252,32 @@ Type: link
 Subreddit: r/programming
 ```
 
+### **TikTok Data - Real-Time Intelligence**
+```
+📊 Successfully extracted 34 TikTok data items!
+🎬 Videos: 7, 👤 Profiles: 7, 🏷️ Categories: 20
+
+🔥 Top video: 7539038956126571797 (26.1M views)
+📍 Source: https://www.tiktok.com/explore
+
+Sample Video:
+ID: 7539038956126571797
+Views: 26.1M
+URL: https://www.tiktok.com/@luckystarfei/video/7539038956126571797
+
+Sample Profile:
+Username: luckystarfei
+Info: 26.1M
+URL: https://www.tiktok.com/@luckystarfei
+
+Sample Categories:
+- Singing & Dancing
+- Comedy  
+- Sports
+- Anime & Comics
+- Relationship
+```
+
 ### **JSON API Response**
 ```json
 {
@@ -262,6 +308,20 @@ Subreddit: r/programming
       "metadata": {
         "author": "Albert Einstein",
         "tags": ["change", "deep-thoughts"]
+      }
+    },
+    {
+      "id": 64,
+      "source": "tiktok",
+      "url": "https://www.tiktok.com/@luckystarfei/video/7539038956126571797",
+      "title": "TikTok Video: 7539038956126571797",
+      "content": "**Type:** Video\n**Video ID:** 7539038956126571797\n**Views/Info:** 26.1M\n**URL:** https://www.tiktok.com/@luckystarfei/video/7539038956126571797\n\nExtracted from TikTok explore page",
+      "scrapedAt": "2025-08-25T06:21:27.000Z",
+      "metadata": {
+        "type": "video",
+        "name": "7539038956126571797", 
+        "text": "26.1M",
+        "extractedFrom": "https://www.tiktok.com/explore"
       }
     }
   ]
@@ -337,37 +397,6 @@ bun update
 # View queue statistics
 curl http://localhost:3000/stats
 ```
-
-## 🎓 Key Technical Achievements
-
-This project demonstrates mastery of several advanced web development concepts:
-
-### **🕷️ Web Scraping Mastery**
-- **DOM manipulation** using CSS selectors and JavaScript evaluation
-- **Anti-detection techniques** for bypassing bot protection systems
-- **Intelligent content parsing** with fallback strategies and error handling
-- **Dynamic content handling** using headless browser automation
-
-### **🏗️ Production Architecture**
-- **Microservices design** with separate API server and worker processes
-- **Message queue integration** using Redis and BullMQ for reliable job processing
-- **Database design** with normalized schema for content and job tracking
-- **RESTful API design** with comprehensive endpoints and status tracking
-
-### **⚡ Performance & Reliability**
-- **Concurrent job processing** with configurable worker concurrency
-- **Automatic retry mechanisms** with exponential backoff for failed jobs
-- **Process monitoring** and automatic restart capabilities with PM2
-- **Comprehensive logging** and health monitoring systems
-
-### **🔧 Modern Development Practices**
-- **TypeScript** for type safety and enhanced developer experience
-- **Modular architecture** with clear separation of concerns
-- **Environment-based configuration** for development and production deployments
-- **Error handling** with graceful degradation and comprehensive logging
-
 ---
 
 *Built with ❤️ using Bun, Playwright, Hono, BullMQ, and modern JavaScript*
-
-**🚀 Ready for deployment on platforms like Railway, Vercel, or any Node.js hosting service!**

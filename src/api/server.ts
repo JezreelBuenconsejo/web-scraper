@@ -44,12 +44,14 @@ app.get('/', (c) => {
       stats: '/stats',
       quickQuotes: 'POST /quick/quotes',
       quickReddit: 'POST /quick/reddit',
+      quickTikTok: 'POST /quick/tiktok',
     },
     documentation: 'https://github.com/JezreelBuenconsejo/web-scraper/blob/main/README.md',
     examples: {
-      quickStart: 'POST /quick/quotes or POST /quick/reddit',
+      quickStart: 'POST /quick/quotes, /quick/reddit, or /quick/tiktok',
       customQuotes: 'POST /scrape with {"type": "scrape-quotes", "url": "http://quotes.toscrape.com", "pages": 3}',
       customReddit: 'POST /scrape with {"type": "scrape-reddit", "url": "https://old.reddit.com/r/programming", "pages": 5}',
+      simpleTikTok: 'POST /scrape with {"type": "scrape-tiktok", "url": "https://www.tiktok.com/explore", "pages": 20}',
     },
   });
 });
@@ -409,6 +411,64 @@ app.get('/debug/status', async (c) => {
     return c.json({
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : 'No stack trace'
+    }, 500);
+  }
+});
+
+
+
+// Quick scrape TikTok
+app.post('/quick/tiktok', async (c) => {
+  try {
+    console.log('🎬 Starting TikTok DATA EXTRACTION (PROVEN STRATEGY!)...');
+    console.log('📊 Strategy: Extract videos, profiles, and categories from explore page');
+    
+    const jobId = await addScrapeJob(
+      JobType.SCRAPE_TIKTOK,
+      { url: 'https://www.tiktok.com/explore', pages: 20 }, // pages = max data items
+      10  // Highest priority - simple strategy is proven!
+    );
+
+    console.log(`✅ TikTok data extraction job created with ID: ${jobId}`);
+
+    // 💾 Create job record in database
+    console.log(`💾 Creating database record for job ${jobId}...`);
+    const dbRecordId = scraperDB.createScrapeJob({
+      job_id: jobId,
+      job_type: JobType.SCRAPE_TIKTOK,
+      status: 'pending',
+      started_at: new Date().toISOString(),
+    });
+
+    console.log(`💾 Database record created with ID: ${dbRecordId}`);
+
+    return c.json({
+      success: true,
+      message: 'TikTok data extraction started! 🎬',
+      jobId,
+      checkStatus: `/jobs/${jobId}`,
+      estimatedTime: '1-3 minutes',
+      targets: ['Videos (with view counts)', 'Creator profiles', 'Content categories'],
+      expectedData: {
+        videos: '5-10 real videos with view counts',
+        profiles: '5-10 creator profiles',
+        categories: '15-20 content categories'
+      },
+      sourcePages: ['explore', 'discover', 'trending']
+    });
+
+  } catch (error) {
+    console.error('❌ Error starting TikTok data extraction:', error);
+    console.error('❌ Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+    });
+    
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to start TikTok data extraction',
+      details: error instanceof Error ? error.name : 'Unknown error type',
     }, 500);
   }
 });

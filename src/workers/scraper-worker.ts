@@ -3,6 +3,7 @@ import { redisConnection } from '../config/redis.js';
 import { JobType, type ScrapeJobData, getQueueStats } from '../config/bullmq.js';
 import { QuotesScraper } from '../scrapers/quotes-scraper.js';
 import { RedditScraper } from '../scrapers/reddit-scraper.js';
+import { SimpleTikTokScraper } from '../scrapers/tiktok-scraper.js';
 import { scraperDB } from '../database/database.js';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
@@ -232,21 +233,155 @@ async function processRedditJob(job: Job<ScrapeJobData>): Promise<any> {
   }
 }
 
-/**
- * ⚫ PROCESS TIKTOK SCRAPING JOB (placeholder for future)
- */
 async function processTikTokJob(job: Job<ScrapeJobData>): Promise<any> {
-  console.log(`⚫ Processing TikTok scraping job ${job.id}...`);
-  await job.updateProgress(50);
+  const { pages, options } = job.data;
+  console.log(`🎬 Processing TikTok DATA EXTRACTION job ${job.id}...`);
+  console.log(`📋 Job data:`, {
+    type: job.data.type,
+    strategy: 'REAL DATA (Videos, Profiles, Categories)',
+    maxItems: pages || 20,
+    requestId: job.data.metadata?.requestId,
+  });
+
+  const scraper = new SimpleTikTokScraper();
   
-  // TODO: Implement TikTok scraper  
-  console.log('📝 TikTok scraper not implemented yet');
-  
-  await job.updateProgress(100);
-  return {
-    success: true,
-    message: 'TikTok scraper placeholder - bonus feature coming soon!',
-  };
+  try {
+    await job.updateProgress(10);
+    
+    // Initialize simple browser
+    console.log('🚀 Initializing Simple TikTok scraper...');
+    await scraper.init();
+    await job.updateProgress(30);
+    
+    console.log(`🎯 Target: TikTok explore/discover pages for real data extraction`);
+    
+    // Navigate to TikTok (tries multiple URLs)
+    console.log('🔗 Navigating to TikTok pages...');
+    const successfulUrl = await scraper.navigateToTikTok();
+    console.log(`✅ Using: ${successfulUrl}`);
+    await job.updateProgress(50);
+    
+    // Extract real TikTok data
+    console.log('🔍 Extracting TikTok data (videos, profiles, categories)...');
+    const data = await scraper.extractTikTokData();
+    await job.updateProgress(80);
+    
+    if (data.length === 0) {
+      console.warn('⚠️ No data extracted - TikTok might be showing different content');
+      // Don't throw error, return partial success
+    }
+    
+    console.log(`✅ Successfully extracted ${data.length} TikTok data items`);
+    
+    // Store each data item in database
+    console.log('💾 Storing TikTok data in database...');
+    let storedCount = 0;
+    
+    for (const item of data) {
+      try {
+        let title = '';
+        let content = '';
+        
+        switch (item.type) {
+          case 'video':
+            title = `TikTok Video: ${item.name}`;
+            content = `**Type:** Video\n**Video ID:** ${item.name}\n**Views/Info:** ${item.text || 'N/A'}\n**URL:** ${item.url}\n\nExtracted from TikTok explore page`;
+            break;
+          case 'profile':
+            title = `TikTok Profile: @${item.name}`;
+            content = `**Type:** Profile\n**Username:** ${item.name}\n**Info:** ${item.text || 'N/A'}\n**URL:** ${item.url}\n\nTikTok creator profile`;
+            break;
+          case 'category':
+            title = `TikTok Category: ${item.name}`;
+            content = `**Type:** Category\n**Name:** ${item.name}\n**Description:** ${item.text || 'TikTok content category'}\n**URL:** ${item.url}\n\nContent category from TikTok explore`;
+            break;
+        }
+        
+        scraperDB.saveScrapedContent({
+          source: 'tiktok',
+          url: item.url,
+          title: title,
+          content: content,
+          raw_data: JSON.stringify(item),
+          scraped_at: new Date().toISOString(),
+          metadata: JSON.stringify({
+            type: item.type,
+            name: item.name,
+            text: item.text,
+            scrapedAt: item.scrapedAt,
+            extractedFrom: successfulUrl
+          })
+        });
+        storedCount++;
+      } catch (error) {
+        console.warn(`⚠️ Failed to store ${item.type} ${item.name}:`, error);
+        // Continue storing other items
+      }
+    }
+    
+    await job.updateProgress(100);
+    
+    // Calculate data summary
+    const videos = data.filter(d => d.type === 'video');
+    const profiles = data.filter(d => d.type === 'profile');  
+    const categories = data.filter(d => d.type === 'category');
+    
+    const result = {
+      success: true,
+      dataExtracted: data.length,
+      dataStored: storedCount,
+      extraction: {
+        totalItems: data.length,
+        videos: videos.length,
+        profiles: profiles.length,
+        categories: categories.length,
+        sourceUrl: successfulUrl,
+        topVideo: videos[0] ? {
+          id: videos[0].name,
+          views: videos[0].text,
+          url: videos[0].url
+        } : null,
+        topProfile: profiles[0] ? {
+          username: profiles[0].name,
+          info: profiles[0].text,
+          url: profiles[0].url
+        } : null,
+      },
+      message: data.length > 0 ? 
+        `Successfully extracted ${data.length} TikTok items (${videos.length} videos, ${profiles.length} profiles, ${categories.length} categories)` : 
+        `Connected to TikTok but no data extracted (page structure may have changed)`,
+    };
+    
+    // Update job status in database
+    scraperDB.updateScrapeJob(job.id!, {
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      result_data: JSON.stringify(result)
+    });
+
+    console.log(`🎉 TikTok DATA EXTRACTION job ${job.id} completed!`);
+    console.log(`📊 Data gathered: ${storedCount}/${data.length} items stored`);
+    console.log(`💰 Business value: HIGH - Real TikTok content intelligence!`);
+    console.log(`🎬 Videos: ${videos.length}, 👤 Profiles: ${profiles.length}, 🏷️ Categories: ${categories.length}`);
+    if (videos.length > 0) console.log(`🔥 Top video: ${videos[0]?.name} (${videos[0]?.text || 'no info'})`);
+    
+    return result;
+    
+  } catch (error) {
+    console.error(`❌ Error in TikTok data extraction job ${job.id}:`, error);
+    
+    // Update job status to failed in database
+    scraperDB.updateScrapeJob(job.id!, {
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error_message: error instanceof Error ? error.message : String(error)
+    });
+    
+    throw error; // BullMQ will handle job failure
+  } finally {
+    // Always clean up browser
+    await scraper.close();
+  }
 }
 
 /**
